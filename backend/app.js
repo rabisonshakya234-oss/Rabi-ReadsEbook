@@ -5,8 +5,6 @@ var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 var cors = require('cors');
 var helmet = require('helmet');
-var compression = require('compression'); // [PROD] npm i compression
-var rateLimit = require('express-rate-limit'); // [PROD] npm i express-rate-limit
 
 var authRoutes = require('./routes/authRoutes');
 var userRoutes = require('./routes/userRoutes');
@@ -20,22 +18,11 @@ var { notFound, errorHandler } = require('./utils/errorHandler');
 var { serveImages } = require('./utils/gridfs');
 var app = express();
 
-// [PROD] Production flag + required env check
-var isProduction = process.env.NODE_ENV === 'production';
-if (isProduction && !process.env.CLIENT_URL) {
-  throw new Error('CLIENT_URL must be set in production');
-}
-
-// [PROD] Trust the reverse proxy (Render, Railway, Heroku, Nginx...) so req.ip / rate limit / secure cookies work
-app.set('trust proxy', 1);
-
 // Middleware (must come before the routes)
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' }, contentSecurityPolicy: false }));
-app.use(logger(isProduction ? 'combined' : 'dev')); // [PROD] was: logger('dev')
-// [PROD] CLIENT_URL can hold multiple origins separated by commas. '*' only used outside production.
-app.use(cors({ origin: process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',').map(function (o) { return o.trim(); }) : '*' }));
-app.use(compression()); // [PROD] gzip responses
-app.use(express.json({ limit: '1mb' })); // [PROD] body size limit
+app.use(logger('dev'));
+app.use(cors({ origin: process.env.CLIENT_URL || '*' }));
+app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -47,22 +34,6 @@ app.use('/uploads/authors', serveImages('author'), express.static(path.join(__di
 app.get('/api', function (req, res) {
   res.status(200).json({ success: true, message: 'Ebook API is running' });
 });
-
-// [PROD] Rate limiting on sensitive routes
-app.use('/api/auth', rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many requests, please try again later.' }
-}));
-app.use('/api/contact', rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Too many requests, please try again later.' }
-}));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -108,20 +79,6 @@ var server = http.createServer(app);
 server.listen(port);
 server.on('error', onError);
 server.on('listening', onListening);
-
-// [PROD] Graceful shutdown + unhandled errors
-process.on('unhandledRejection', function (err) {
-  console.error('Unhandled Rejection:', err);
-  server.close(function () { process.exit(1); });
-});
-process.on('uncaughtException', function (err) {
-  console.error('Uncaught Exception:', err);
-  server.close(function () { process.exit(1); });
-});
-process.on('SIGTERM', function () {
-  console.log('SIGTERM received, shutting down gracefully');
-  server.close(function () { process.exit(0); });
-});
 
 /**
  * Normalize a port into a number, string, or false.
