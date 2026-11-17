@@ -15,6 +15,7 @@ var authorRoutes = require('./routes/authorRoutes');
 var contactRoutes = require('./routes/contactRoutes');
 var adminRoutes = require('./routes/adminRoutes');
 var { notFound, errorHandler } = require('./utils/errorHandler');
+var { serveImages } = require('./utils/gridfs');
 
 var app = express();
 
@@ -28,8 +29,8 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 // Cover images and author photos are public. Ebook files are NOT served here: they are only
 // available through the protected download route.
-app.use('/uploads/covers', express.static(path.join(__dirname, 'uploads', 'covers')));
-app.use('/uploads/authors', express.static(path.join(__dirname, 'uploads', 'authors')));
+app.use('/uploads/covers', serveImages('cover'), express.static(path.join(__dirname, 'uploads', 'covers')));
+app.use('/uploads/authors', serveImages('author'), express.static(path.join(__dirname, 'uploads', 'authors')));
 
 // Health check
 app.get('/api', function (req, res) {
