@@ -39,7 +39,9 @@ const errorHandler = (err, req, res, next) => {
 
 	if (status >= 500) {
 		console.error(err);
-		if (config.isProduction) message = "Something went wrong on the server";
+		// Set the environment variable SHOW_ERRORS=true only while looking for a problem: the response then
+		// shows the real reason. Remove it afterwards.
+		if (config.isProduction && process.env.SHOW_ERRORS !== "true") message = "Something went wrong on the server";
 	}
 
 	const body = { success: false, message };
