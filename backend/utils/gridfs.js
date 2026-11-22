@@ -14,6 +14,8 @@ const getBucket = () => {
 	return {
 		openUploadStream: (filename, options = {}) =>
 			bucket(BUCKET_OF_KIND[options.metadata && options.metadata.kind] || "ebooks").openUploadStream(filename, options),
+		// used by the download route (bookController.downloadBook): ebook files live in the "ebooks" bucket
+		openDownloadStream: (id) => bucket(BUCKET_OF_KIND.ebook).openDownloadStream(id),
 	};
 };
 
@@ -25,6 +27,33 @@ const deleteById = async (id) => {
 			return;
 		} catch (error) {
 			// not in this bucket: try the next one
+		}
+	}
+};
+
+// Finds a stored ebook file by its name (used by bookService.getDownloadFile).
+// Gives the file document ({ _id, length, ... }) or null when it is not stored.
+const findByName = async (name) => {
+	if (!name || !mongoose.connection.db) return null;
+	const [file] = await bucket(BUCKET_OF_KIND.ebook)
+		.find({ filename: path.basename(String(name)) })
+		.limit(1)
+		.toArray();
+	return file || null;
+};
+
+// Deletes the stored file(s) with this name, whichever bucket they are in (used by bookService and
+// authorService when a file is replaced or a book / author is deleted). A missing file is not an error,
+// and a problem here never becomes a server error.
+const deleteByName = async (name) => {
+	if (!name || !mongoose.connection.db) return;
+	const clean = path.basename(String(name));
+	for (const bucketName of Object.values(BUCKET_OF_KIND)) {
+		try {
+			const files = await bucket(bucketName).find({ filename: clean }).toArray();
+			for (const file of files) await bucket(bucketName).delete(file._id).catch(() => {});
+		} catch (error) {
+			// ignore: nothing to delete in this bucket
 		}
 	}
 };
@@ -68,4 +97,4 @@ const serveImages = (kind) => (req, res, next) => {
 		});
 };
 
-module.exports = { getBucket, deleteById, serveImages };
+module.exports = { getBucket, deleteById, findByName, deleteByName, serveImages };
